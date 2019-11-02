@@ -152,6 +152,13 @@ void blink(uint32_t msec)
   digitalWriteFast(13,!digitalReadFast(13)); 
   to=t1;
 }
+
+void doBlink(uint32_t dt, uint32_t msec)
+{ pinMode(13,OUTPUT);
+  uint32_t t0=millis();
+  while(millis()<t0+dt) blink(msec);
+}
+
 /*
  * *************** Acquisition interface ***********************************
  */
@@ -399,7 +406,6 @@ void go_hibernate(uint32_t seconds)
 
 void check_hibernate( parameters_s *par, int flag);
 
-
 int16_t doMenu();
 int16_t parMods=0;
 static void printAll(void);
@@ -408,7 +414,6 @@ int haveAcq=0;
 uint32_t startTime=0;
 int loopStatus=0; // 0: stopped, 1: stopping, 2: running
 int doHibernate=0;
-  
 
 // to disable EventResponder
 // (https://forum.pjrc.com/threads/46442-Minimal-Blink-fails-with-void-yield()?p=153602&viewfull=1#post153602)
@@ -450,10 +455,7 @@ void setup(void)
     //expect -1 to continue with program and a value >0 to hibernate for (val) minutes
     
     // signal end of menu
-    tt=millis();
-    pinMode(13,OUTPUT); // for LED
-    while(millis()-tt<1000) blink(100);
-    digitalWrite(13,HIGH); // switch of Led
+    doBlink(1000,100);
 
     if(parMods)
     {
@@ -472,9 +474,7 @@ void setup(void)
       loggerSetup(N_CHAN, F_SAMP, N_SAMP);
       readConfig(&parameters);
       // for debugging
-      uint32_t tt=millis();
-      pinMode(13,OUTPUT); // for LED
-      while(millis()-tt<1100) blink(500);
+      doBlink(1500,500);
     #endif
   }
   
@@ -493,7 +493,7 @@ void setup(void)
 		Serial.println("ESM Logger and Monitor");
   #else
     // blink for 1 second
-    while(millis()<1000) blink(100);
+    doBlink(1000,100);
 	#endif
 
 	#ifdef DO_LOGGER
