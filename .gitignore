@@ -1,0 +1,4 @@
+bin/core/*
+bin/lib/*
+bin/src/*
+bin/core.a
