@@ -23,8 +23,6 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#define INF 0xffffffff
-
 typedef struct
 {
   uint32_t rtc;
@@ -66,17 +64,17 @@ class uSD_IF
   uSD_IF(void) {;}
   void init(void);
   void reset(void) {fileStatus=0;}
-  uint32_t save(char *fmt, int mxfn, int max_mb);
-  uint32_t save(int max_mb);
+  int32_t save(char *fmt, int mxfn, int max_mb);
+  int32_t save(int max_mb);
   uint32_t overrun=0;
   uint32_t maxBlockSize=0;
   int16_t isRunning = 0; // tell upper classes 
 
   private:
-  virtual uint8_t *drain(void) =0;
-  virtual uint16_t write(void *src) =0;
+  virtual void *drain(void) =0;
+  virtual int16_t write(void *src) =0;
   virtual void haveFinished(void)=0;
-  uint16_t fileStatus = INF;
+  uint16_t fileStatus = 0;
   uint32_t ifn = 0;
   uint32_t loggerCount = 0;
   //
@@ -103,14 +101,14 @@ public:
   //
   void clear(void);
   //
-  uint8_t *drain(void);
-  uint16_t write(void *src);
+  void *drain(void);
+  int16_t write(void *src);
   void haveFinished(void) {enabled=0;} // got signal from uSD_IF
 
 private:
   store<T,nq,nd> pool;
   T* queue[nq];
-  uint16_t head, tail, enabled;
+  int16_t head, tail, enabled;
 
   T buffer[na*nd]; // for draining data
 };
@@ -129,9 +127,9 @@ void Logger<T,nq,nd,na>:: clear(void)
   }
 
 template <typename T, int nq, int nd, int na>
-uint16_t Logger<T,nq,nd,na>:: write(void *inp)
+int16_t Logger<T,nq,nd,na>:: write(void *inp)
   {
-    uint16_t h;
+    int16_t h;
 
     if(!enabled) return 0; // don't do anything
     
@@ -140,7 +138,7 @@ uint16_t Logger<T,nq,nd,na>:: write(void *inp)
     if (h == tail) {  // disaster
       overrun++;
       // simply ignore new data
-      return INF;
+      return -1;
     } 
     else 
     { queue[h] = pool.fetch(h);
@@ -152,12 +150,12 @@ uint16_t Logger<T,nq,nd,na>:: write(void *inp)
         return head;
       }
       else
-        return INF;
+        return -1;
     }
   }
   
 template <typename T, int nq, int nd, int na>
-uint8_t * Logger<T,nq,nd,na>:: drain(void)
+void * Logger<T,nq,nd,na>:: drain(void)
   {
     uint16_t n;
     if(head>tail) n=head-tail; else n = nq + head -tail;
@@ -186,7 +184,7 @@ uint8_t * Logger<T,nq,nd,na>:: drain(void)
           bptr += nd;
         }
       }
-      return (uint8_t *)buffer;
+      return (void *)buffer;
     }
     return 0;
   }
@@ -213,17 +211,17 @@ uint16_t generateFilename(char *dev, char *filename)
   return 1;
 }
 
-uint32_t uSD_IF::save(int max_mb )
+int32_t uSD_IF::save(int max_mb )
 { // does also open/close a file when required
   //
   static uint16_t isLogging = 0; // flag to ensure single access to function
 
   char filename[80];
+  uint16_t nbuf = maxBlockSize;
+  uint32_t maxLoggerCount = (max_mb*1024*1024)/maxBlockSize;
 
   if (isLogging) return 1; // we are already busy (should not happen)
   isLogging = 1;
-
-  if(fileStatus==4) { isLogging = 0; return 1; } // don't do anything anymore 
 
   if(fileStatus==0)
   { // open new file
@@ -233,9 +231,10 @@ uint32_t uSD_IF::save(int max_mb )
     } // end of all operations
 
     mFS.open(filename);
-#if DO_DEBUG > 0
-    Serial.printf(" %s\n\r",filename);
-#endif
+    #if DO_DEBUG > 0
+        Serial.printf(" %s\n\r",filename);
+        Serial.printf(" %d blocks max: %d  MB\n\r",maxLoggerCount,max_mb);
+    #endif
     loggerCount=0;  // count successful transfers
     overrun=0;      // count buffer overruns
     //
@@ -243,14 +242,11 @@ uint32_t uSD_IF::save(int max_mb )
       fileStatus = 3; // close file on write failure
     else
       fileStatus = 2; // flag as open
-//    isLogging = 0; return 1;
   }
 
   if(fileStatus==2)
   { 
     // write to file
-    uint16_t nbuf = maxBlockSize;
-    uint32_t maxLoggerCount = (max_mb*1024*1024)/maxBlockSize;
     uint8_t *buffer=(uint8_t*)drain();
     if(buffer)
     {
@@ -259,43 +255,42 @@ uint32_t uSD_IF::save(int max_mb )
       { loggerCount++;
         if(loggerCount == maxLoggerCount)
         { fileStatus= 3;}
-#if DO_DEBUG == 2
-        else
-        { if (!(loggerCount % 10)) Serial.printf(".");
-          if (!(loggerCount % 640)) {Serial.println(); }
-          Serial.flush();
-        }
-#endif
+        #if DO_DEBUG == 2
+          else
+          { if (!(loggerCount % 10)) Serial.printf(".");
+            if (!(loggerCount % 640)) {Serial.println(); }
+            Serial.flush();
+          }
+        #endif
       }
     }
     if(isRunning<0) 
     { fileStatus=3; // flag to stop logging
       isRunning=0;  // tell close to finish to finish aquisition
     }
-//    if(fileStatus==2){ isLogging = 0; return 1; }
   }
 
   if(fileStatus==3)
   {
     //close file
     mFS.close();
-#if DO_DEBUG ==2
-    Serial.printf("\n\r(%d)\n\r",overrun);
-#endif
-    if(isRunning==0) // we should stop logging
-    { haveFinished(); fileStatus = 4; 
-//      isLogging = 0; return 0;
-    }
-    
+    #if DO_DEBUG ==2
+        Serial.printf("\n\r overrun: (%d)\n\r",overrun);
+    #endif
     //
     fileStatus= 0; // flag file as closed   
-//    isLogging = 0; return 1;
   }
-  
-  isLogging=0; return 1; 
+
+  if(isRunning==0) // we should stop logging
+  { haveFinished(); fileStatus = 4; 
+  }
+
+  isLogging = 0;
+  if(fileStatus==4) { return -1; } // don't do anything anymore 
+  return 1; 
 }
 
-uint32_t uSD_IF::save(char *fmt, int mxfn, int max_mb )
+int32_t uSD_IF::save(char *fmt, int mxfn, int max_mb )
 { // does also open/close a file when required
   //
   static uint16_t isLogging = 0; // flag to ensure single access to function
@@ -313,7 +308,7 @@ uint32_t uSD_IF::save(char *fmt, int mxfn, int max_mb )
     ifn++;
     if (ifn > (unsigned)mxfn) // have end of acquisition reached, so end operation
     { fileStatus = 4;
-      isLogging = 0; return INF; // tell calling loop() to stop ACQ
+      isLogging = 0; return -1; // tell calling loop() to stop ACQ
     } // end of all operations
 
     sprintf(filename, fmt, (unsigned int)ifn);

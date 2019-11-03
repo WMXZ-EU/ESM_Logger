@@ -75,7 +75,7 @@ uint16_t par_mods=0;
 
 #if ON_TIME >0
   #undef DO_DEBUG
-  #define DO_DEBUG 0
+  #define DO_DEBUG 2
 #endif
 
 // enable either logger
@@ -316,7 +316,7 @@ void i2sInProcessing(void * s, void * d)
     #else
       DATA_T *logData = src;
     #endif
-		if(logger.write(logData)==INF) //store always original data
+		if(logger.write(logData)<0) //store always original data
     { // have write error
       i2sWriteErrorCount++;
     }
@@ -436,7 +436,6 @@ void setup(void)
   if(digitalReadFast(2)==LOW)
   { 
     // signal begin of menu
-    uint32_t tt=millis();
     pinMode(13,OUTPUT); // for LED
     while(!SERIALX) blink(1000);
     digitalWrite(13,LOW); // switch of Led
@@ -533,17 +532,18 @@ void loop(void)
       if(loopStatus==0) loopStatus=2;
     #endif
     
-    if(millis()>(parameters.on_time*60+3)*1000)  //
+    if((loopStatus==2) && (millis()>(parameters.on_time*60+3)*1000))  //
     { doHibernate=1; 
       #ifdef DO_LOGGER
         loggerStop(1);
-      #else
-        loopStatus=1;
       #endif
     }
     
     #ifdef DO_LOGGER
-      if(loopStatus==2){ if(!loggerLoop()) loopStatus=1; }
+      if(loopStatus==2)
+      { int16_t stat = loggerLoop();
+        if(stat <= 0 ) loopStatus=1; 
+      } // we get signal of closed file
     #endif
       
 #else
@@ -717,7 +717,7 @@ void check_hibernate( parameters_s *par, int flag)
     
     dt = dto - ((tx-t1 +24*3600) % (24*3600));
 //    while(!Serial);  Serial.printf("%d %d %d %d\n\r",dto,t1,tx,dt); Serial.flush();  delay(10000);
-    
+    Serial.println(dt);
     go_hibernate(dt);
 #endif
   }
