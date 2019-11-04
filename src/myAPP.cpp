@@ -46,6 +46,7 @@
 #include "myApp.h"
 
 #define SERIALX Serial // needed for remote configuration could be Serial1 if use of HW serial
+#define USE_LUX 0
 
 //default parameters
 // times for hibernate 
@@ -148,7 +149,7 @@ DATA_T i2s_rx_buffer[N_BUF];          // buffer for DMA
 void blink(uint32_t msec)
 { static uint32_t to=0;
   uint32_t t1 = millis();
-  if(t1-to<msec) {yield(); return;}
+  if(t1<to+msec) {yield(); return;}
   digitalWriteFast(13,!digitalReadFast(13)); 
   to=t1;
 }
@@ -157,6 +158,7 @@ void doBlink(uint32_t dt, uint32_t msec)
 { pinMode(13,OUTPUT);
   uint32_t t0=millis();
   while(millis()<t0+dt) blink(msec);
+  digitalWriteFast(13,LOW);
 }
 
 /*
@@ -495,9 +497,11 @@ void setup(void)
     doBlink(1000,100);
 	#endif
 
+  #if USE_LUX ==1
 	#ifdef DO_LOGGER
     logLightSensor();  
 	#endif
+  #endif
 
 	haveAcq=acqSetup();
  loopStatus=0;
@@ -737,8 +741,9 @@ void check_hibernate( parameters_s *par, int flag)
 ? m\n:  ESM_Logger reports mac address (name?)
 */
 char * encode_mac(char * text)  ;
+#if USE_LUX == 1
 int getLightSensor();
-
+#endif
 char text[32];
 
 static void printAll(void)
@@ -782,7 +787,9 @@ static void doMenu1(void)
         case 'n': SERIALX.printf("%s\r\n",parameters.name);break;  // could be (unique) mac address
         case 'd': SERIALX.printf("%s\r\n",getDate(text));break;
         case 't': SERIALX.printf("%s\r\n",getTime(text));break;
+        #if USE_LUX==1
         case 'l': SERIALX.printf("%04d\r\n",getLightSensor());break;
+        #endif
         case 'm': SERIALX.printf("%s\r\n",encode_mac(text)); break;
       }
     }

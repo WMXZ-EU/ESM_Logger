@@ -366,19 +366,20 @@ int32_t uSD_IF::save(char *fmt, int mxfn, int max_mb )
   isLogging=0; return 0;
 }
 
+#if USE_LUX==1
 // uncomment all LightSensor lines if sensor is attached
 #include <Wire.h>
-//#include <BH1750FVI.h>
+#include <BH1750FVI.h>
 
-//BH1750FVI LightSensor;
+BH1750FVI LightSensor;
 
 int getLightSensor()
 {
   int lux=0;
-//    LightSensor.begin();
-//    LightSensor.SetAddress(Device_Address_H);//Address 0x5C
-//    LightSensor.SetMode(Continuous_H_resolution_Mode);
-//  lux = LightSensor.GetLightIntensity();
+    LightSensor.begin();
+    LightSensor.SetAddress(Device_Address_H);//Address 0x5C
+    LightSensor.SetMode(Continuous_H_resolution_Mode);
+    lux = LightSensor.GetLightIntensity();
   return lux;
 }
 
@@ -394,7 +395,7 @@ void logLightSensor(void)
       tx.tm_year, tx.tm_mon, tx.tm_mday,tx.tm_hour, tx.tm_min, lux);
   mFS.logText((char *)"lux.txt",(char *)txt);
 }
-
+#endif
 
 void storeConfig(void * ptr)
 { char text[32];
